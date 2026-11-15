@@ -64,7 +64,7 @@ def publish_requests(url, interval, count=None):
                     message_id=request["id"],
                 ),
             )
-            if not published:
+            if published is False:
                 raise RuntimeError(f"Broker did not confirm message {request['id']}.")
             logging.info("Published %s: %s", routing_key, body.decode("utf-8"))
             if count is None or sequence < count:

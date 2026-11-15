@@ -2,24 +2,24 @@
 
 **Student:** Budida Ajay  
 **Roll number:** 23BCS061  
-**Status:** Working draft — FreshCart baseline completed; Snowflake follow-up experiments, hosted CI/Mage/RabbitMQ evidence, and screenshots remain pending.
+**Status:** Submission draft — Parts A–D implementations and the bonus integration code are present. Local tests, the Mage CLI pipeline, the RabbitMQ routing demo, and CI screenshots are available. The bonus cell has not been run with live RabbitMQ and Snowflake credentials, so no live bonus result is claimed.
 
 ## Part A — Git and CI/CD
 
 ### A1. Repository
 
-The local repository is organized into `elt/`, `iris_project/`, `stream/`,
-`tests/`, and `.github/workflows/`. The public GitHub URL and GitHub Actions
-screenshots must be added after the repository is published.
+The repository is organized into `elt/`, `iris_project/`, `stream/`, `tests/`,
+and `.github/workflows/`. The public repository is
+https://github.com/Ajay9704/freshcart-pipelines.
 
-Current local history:
+Recent local history:
 
 ```text
-0bb02bf Document pipeline run instructions
-199b3e4 Test RabbitMQ message acknowledgements
-7e071b5 Harden FreshCart notebook and add checks
-05ac388 Add RabbitMQ dispatcher and drivers
-84cf386 Build Mage Iris pipeline blocks
+33fc922 Document pipeline execution and assignment findings
+34da3ce Add tests for data preparation and pipeline components
+0d3fb4b Develop FreshCart ELT pipeline and validation checks
+ac42f16 Add RabbitMQ dispatcher and message drivers
+d5ec2d1 Build Mage Iris classification pipeline
 4cf16ed Set up assignment repo and CI
 ```
 
@@ -42,7 +42,10 @@ exists only in the local repository until it is pushed.
 `tests/test_prepare_data.py` checks that the Iris transformer returns exactly
 120 training rows and 30 test rows. The GitHub Actions workflow runs pytest on
 pushes and pull requests using Python 3.12. The required green and intentionally
-red GitHub Actions screenshots are pending the remote repository setup.
+red GitHub Actions runs were exercised: the initial workflow passed, the
+temporary `test_size=0.3` change failed as intended, and restoring
+`test_size=0.2` made the workflow pass again. The passing, intentional failure,
+and restored passing run are included in Appendix A.
 
 ## Part B — FreshCart ELT on Snowflake
 
@@ -66,8 +69,11 @@ configuration warnings, but all SQL stages and quality checks completed.
 | Gold loyalty points | 126 | 126 |
 | Share rejected | 25% | 25% |
 
-The sixth check, future-dated orders in silver, also returned 0 (`OK`). Save
-screenshots from the Colab run and append them to the final report.
+The sixth check, future-dated orders in silver, returned 0 (`OK`) in the
+baseline run. The available Colab screenshots include a later intentional
+future-date failure and cleanup sequence; a clean baseline screenshot is not
+present, so the baseline figures below are reported from the recorded run and
+not represented as a screenshot-backed result.
 
 ### B2. Record trace
 
@@ -120,17 +126,20 @@ Silver from 2024-01-15 through 2026-08-14 and Gold from 2026-08-15 onward.
 The run reported 4 gold orders, ₹7,785.00 revenue, and 161 points. Comparing
 before and after `published_at` values showed that only ORD-1002 changed.
 
-Bronze still grows by eight order rows on each run because every extracted
-website/mobile copy is appended. The final gold `MERGE` matches by `order_id`
+With the baseline input, bronze grows by eight order rows per run because every
+extracted website/mobile copy is appended. The final gold `MERGE` matches by `order_id`
 and updates a matched row only when its `row_hash` changes. With identical
 inputs, the hash is unchanged, so gold totals and `published_at` stay stable;
 the new Arjun event changes ORD-1002's tier-dependent hash and should update
 that one row.
 
-After a subsequent rerun, the totals query displayed 80 bronze order rows,
-2 quarantine rows, 4 gold orders, ₹7,785.00 revenue, and 161 points. All four
-Gold `published_at` timestamps matched the values captured immediately before
-that rerun, confirming that the repeated input did not update Gold.
+The later totals screenshot displays 96 bronze order rows, 2 quarantine rows,
+4 gold orders, ₹7,785.00 revenue, and 161 points. This supersedes an earlier
+draft value of 80 bronze rows; bronze increases on each extraction, so the
+count depends on how many runs had been made when the screenshot was captured.
+The repeated input did not add duplicate gold orders. The earlier pipeline
+run comparison recorded that all four Gold `published_at` timestamps were
+stable across the compared rerun.
 
 ### B5. Quality check and ELT explanation
 
@@ -143,32 +152,50 @@ confirming that quality checks report problems but do not stop the pipeline.
 After removing the mock order and rerunning, the future-date check returned
 `0 OK`, gold returned to 4 orders, and the total remained ₹7,785.00 and 161
 points. The run log also confirmed the web input returned to its original six
-records (plus two mobile records). Add the failure and cleanup screenshots to
-the report appendix.
+records (plus two mobile records). The available future-date failure
+screenshot is included in Appendix B; a legible screenshot showing every
+quarantine reason for ORD-1006 and a clean baseline screenshot are not
+available.
 
 FreshCart is a good fit for ELT because the original web and mobile JSON can
 be loaded into Snowflake first, then standardized, validated, deduplicated,
 and enriched with SQL where the data is stored. Keeping the raw records in
 bronze also makes it possible to revise the transformations and reprocess
-without extracting the source data again. ETL would be preferable if data
-must be masked or filtered before it is allowed into the warehouse, for
-example when sensitive fields cannot be landed in raw form for compliance.
-Rewrite this explanation in your own words and replace the ETL example with
-the specific situation your instructor used in the lecture, if different.
+without extracting the source data again. ETL is more appropriate when data
+must be filtered or masked before it can enter the warehouse, such as a
+compliance rule that prohibits landing raw personal information.
 
 ## Part C — Mage Iris pipeline
 
 The Mage-compatible blocks and pipeline metadata are in `iris_project/`. The
-standalone pytest suite passed locally: **6 passed**. Direct block execution
-with the supplied fixed split produced these test accuracies:
+full project pytest suite passed locally: **16 passed**. The Mage CLI was run
+with `--test` for each `max_depth` from 1 through 5, using the supplied fixed
+split. Each run loaded 150 Iris rows. The model block produced these observed
+test accuracies:
 
 | `max_depth` | Test accuracy | 80% block check |
 |---:|---:|---|
-| 1 | 0.633 | Fails |
-| 2 | 0.967 | Passes |
-| 3 | 1.000 | Passes |
-| 4 | 1.000 | Passes |
-| 5 | 1.000 | Passes |
+| 1 | 0.633 | Fails; Mage exits 1 and no predictions CSV is created |
+| 2 | 0.967 | Passes; Mage exits 0 and predictions CSV is created |
+| 3 | 1.000 | Passes; Mage exits 0 and predictions CSV is created |
+| 4 | 1.000 | Passes; Mage exits 0 and predictions CSV is created |
+| 5 | 1.000 | Passes; Mage exits 0 and predictions CSV is created |
+
+Before each run, the previous `iris_project/iris_predictions.csv` was removed so
+its presence proves that the current run reached the exporter. At depth 1, the
+model block raised `Model accuracy is below 80%`, the pipeline exited
+unsuccessfully, and the CSV remained absent. At depths 2–5, each run completed
+successfully and wrote the CSV. The exporter resolves its output using Mage's
+project path, and its block test verifies the saved file contains 30 rows and
+the expected prediction columns.
+
+### C4. Own block and test
+
+`validate_data` is the added transformer between `load_iris` and
+`prepare_data`. Its block test checks that the output has no missing values
+and contains all three Iris classes; the project-level test also runs this
+block before the train/test preparation step. Appendix C shows the block and
+its place in the pipeline graph.
 
 For `max_depth=3`, the locally evaluated confusion matrix was:
 
@@ -180,10 +207,13 @@ actual      0   1   2
        2    0   0  11
 ```
 
-The metric values were accuracy 1.000, precision 1.000, recall 1.000, and
-F1-score 1.000. These are local block results, not a Mage CLI or UI run.
-Mage run logs, CSV-gating observations, and the UI graph screenshot remain
-pending.
+The depth-3 evaluation reported accuracy 1.000, precision 1.000, recall 1.000,
+and F1-score 1.000. The five depth experiments and CSV-gating observations
+were verified through the Mage CLI. Appendix C includes the graph, metadata,
+metrics table, input preview, and exported CSV. The file named
+`confusion_matrix.png` is a screenshot of the metrics table, not a confusion
+matrix; the matrix values above come from the verified local evaluation
+output.
 
 ## Part D — RabbitMQ food-order stream
 
@@ -206,22 +236,110 @@ not match the two-word key in row 6. `#` consumes zero or more words, so
 
 The dispatcher and driver scripts are in `stream/`. Unit tests verify that
 every tenth payload omits `zone`, that such deliveries use NACK with
-`requeue=False`, and that complete deliveries are ACKed. A live broker run,
-console evidence, and the two-minute routing demonstration remain pending.
+`requeue=False`, and that complete deliveries are ACKed. A RabbitMQ broker was
+run in Docker with its AMQP port bound to `127.0.0.1`. Six drivers were started
+with the assignment's binding patterns.
+
+The deterministic D1 check published `bangalore.koramangala.food`; exactly
+Ravi, Meena, and Control received it. The two-minute dispatcher run published
+60 requests in 121.7 seconds. The driver logs showed 76 valid deliveries and
+10 missing-zone rejections. Example console output:
+
+```text
+Arjun received bangalore.whitefield.ride: {"id": "64501dbc-2b96-42f7-9443-8d8a194d7a34", "city": "bangalore", "type": "ride", "ts": "2026-11-15T13:46:21.762076+00:00", "zone": "whitefield"}
+Arjun rejected message 5a894ff8-3227-4e95-a901-57d20413fb98; missing fields: zone
+```
+
+`basic_ack` removes a successfully processed delivery from the queue. If a
+driver disconnects before acknowledging a delivery, RabbitMQ can requeue it
+for redelivery. Requeueing a permanently malformed message would create a
+repeated delivery loop, so the invalid request uses `basic_nack(requeue=False)`
+to discard it.
+The RabbitMQ run was verified from the live terminal logs; a dedicated
+RabbitMQ screenshot was not saved in the current screenshot folder.
+
+### D4. Bonus — RabbitMQ to Snowflake
+
+The bonus implementation is in `stream/freshcart_consumer.py`,
+`stream/freshcart_publisher.py`, `elt/rabbitmq_ingest.py`, and the final
+integration cell in `elt/freshcart_elt.ipynb`. The consumer declares a
+temporary queue on the existing topic exchange, collects for 60 seconds,
+acknowledges JSON orders with the required FreshCart fields, and rejects
+malformed messages without requeueing. The deterministic publisher emits the
+same valid Arjun order three times. The notebook passes the collected records
+to the existing `write_landing()` helper, loads the resulting file through
+`load_file()`, and reuses the existing cleaning, deduplication, enrichment,
+and hash-guarded Gold `MERGE`.
+
+The notebook then writes and loads the same batch a second time and checks
+that Gold order count, INR revenue, loyalty points, and the streamed order's
+`published_at` timestamp remain unchanged. The consumer, publisher, and
+landing/load handoff pass mock-based tests. **The authenticated notebook cell
+has not been run against RabbitMQ and Snowflake**, because no reachable
+`RABBITMQ_URL` or Snowflake credentials are available in this local session.
+Therefore the implementation and its tests are verified, but a live bonus
+result is not claimed.
 
 ## Part E — Integration and reflection
 
 ```text
-Git working tree -> staging -> local commits -> GitHub -> CI tests
-                                                    |
-             +------------------+------------------+-----------------+
-             |                  |                                    |
-       FreshCart ELT        Mage Iris                         RabbitMQ stream
-       bronze -> gold       data -> model                      dispatcher -> drivers
+Git -> staging -> commits -> GitHub -> CI tests
+                               |
+       +-----------------------+--------------------------+
+       |                       |                          |
+FreshCart ELT              Mage Iris                RabbitMQ stream
+landing -> bronze ->       data -> validate ->      dispatcher -> drivers
+silver -> gold             model -> CSV             -> FreshCart consumer
+                                                       -> landing -> gold
 ```
 
-The personal reflection and viva answers should be completed after the
-remaining hosted runs. One local issue encountered during development was that
-pytest collected an imported Mage test block as a test function; importing it
-under a non-`test_` alias resolved the collection error. Rewrite this reflection
-in your own words and include the actual debugging steps you took.
+### Reflection
+
+This assignment showed why pipeline behavior must be checked at each boundary,
+not inferred from a green block or a successful command alone. The Mage
+exporter initially wrote outside the project tree, so the predictions existed
+but were not visible where Mage users expected them. The RabbitMQ publisher
+also exposed a library-specific detail: with publisher confirms, Pika can
+return `None` for a successful publish, so treating every false-like value as
+failure caused a false error. In the ELT flow, retaining raw data in bronze
+made it possible to rerun transformations and compare stable Gold results.
+The stream-to-lakehouse code follows the same principle by preserving each
+batch with a run ID and checking an identical replay. The remaining limitation
+is evidential rather than an implementation claim: the bonus cell still needs
+a live run with reachable broker and Snowflake credentials before its
+end-to-end result can be reported.
+
+## Appendix A — GitHub Actions
+
+![Initial passing CI run](../screenshots/Screenshot%20(9).png)
+
+![Intentional failing CI run](../screenshots/Screenshot%20(10).png)
+
+![Passing CI run after restoring the test](../screenshots/Screenshot%20(11).png)
+
+## Appendix B — FreshCart / Colab
+
+![Intentional future-date quality-check failure](../screenshots/Screenshot%20(12).png)
+
+![Bronze and Gold totals captured after repeated runs](../screenshots/Screenshot%202026-11-15%20202427.png)
+
+![Gold publication timestamp evidence](../screenshots/Screenshot%202026-11-15%20202414.png)
+
+The available screenshot set also includes detailed table outputs. The image
+`Screenshot 2026-11-15 202319.png` truncates the quarantine reasons, so it is
+not used as proof that all three ORD-1006 reasons are legible. The screenshots
+`202414` and `202438` appear duplicated; only one is included here.
+The original clean baseline and a separate post-cleanup screenshot are not
+available in the folder.
+
+## Appendix C — Mage
+
+![Mage graph with the exporter and evaluator branch](../screenshots/c1_mage_grapg.png)
+
+![Mage metadata with the block dependencies](../screenshots/c2_mage_metadata.png)
+
+![Mage input preview](../screenshots/data_loader_mage.png)
+
+![Mage evaluation metrics table; this is not the confusion matrix](../screenshots/confusion_matrix.png)
+
+![Exported Iris predictions CSV](../screenshots/iris_pred_csv.png)

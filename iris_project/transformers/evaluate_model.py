@@ -8,14 +8,19 @@ from sklearn.metrics import (
     recall_score,
 )
 
-try:
-    from mage_ai.data_preparation.decorators import test, transformer
-except ImportError:
-    def transformer(function):
-        return function
+if "transformer" not in globals():
+    try:
+        from mage_ai.data_preparation.decorators import transformer
+    except ImportError:
+        def transformer(function):
+            return function
 
-    def test(function):
-        return function
+if "test" not in globals():
+    try:
+        from mage_ai.data_preparation.decorators import test
+    except ImportError:
+        def test(function):
+            return function
 
 
 @transformer
@@ -23,10 +28,16 @@ def evaluate(data, *args, **kwargs):
     actual = data["target"]
     predicted = data["predicted"]
 
+    confusion_matrix = pd.crosstab(
+        actual,
+        predicted,
+        rownames=["actual"],
+        colnames=["predicted"],
+    )
     print("Confusion matrix:")
-    print(pd.crosstab(actual, predicted, rownames=["actual"], colnames=["predicted"]))
+    print(confusion_matrix)
 
-    return pd.DataFrame(
+    metrics = pd.DataFrame(
         {
             "metric": ["accuracy", "precision", "recall", "f1_score"],
             "value": [
@@ -37,6 +48,9 @@ def evaluate(data, *args, **kwargs):
             ],
         }
     )
+    print("Metrics:")
+    print(metrics.to_string(index=False))
+    return metrics
 
 
 @test

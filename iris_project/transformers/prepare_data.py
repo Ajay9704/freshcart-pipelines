@@ -3,14 +3,19 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-try:
-    from mage_ai.data_preparation.decorators import test, transformer
-except ImportError:
-    def transformer(function):
-        return function
+if "transformer" not in globals():
+    try:
+        from mage_ai.data_preparation.decorators import transformer
+    except ImportError:
+        def transformer(function):
+            return function
 
-    def test(function):
-        return function
+if "test" not in globals():
+    try:
+        from mage_ai.data_preparation.decorators import test
+    except ImportError:
+        def test(function):
+            return function
 
 
 @transformer
