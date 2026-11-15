@@ -17,7 +17,7 @@ except ImportError:
 def transform(data, *args, **kwargs):
     train_data, test_data = train_test_split(
         data,
-        test_size=0.3,
+        test_size=0.2,
         random_state=42,
     )
 
